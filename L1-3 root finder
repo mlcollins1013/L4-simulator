@@ -1,0 +1,41 @@
+
+from math import pi
+
+#define our parameters
+G = 6.67408e-11
+m_earth = 5.972e24 
+m_moon = .07346e24 
+l = 384400000 #distance from moon to earth, meters
+x1 = m_moon*l/(m_earth+m_moon)
+x2 = m_earth*l/(m_earth+m_moon)
+velocity = (G*(m_earth+m_moon)/l)**0.5
+period = 2* pi*l/velocity
+theta_d = 2*pi/period
+
+#define our function from the derivation
+def x_eqn(xs):
+    return -G*m_earth/((xs+x1)*abs(xs+x1))-G*m_moon/((xs-x2)*abs(xs-x2)) + theta_d**2*xs
+        
+from numpy import arange
+
+#choose the range of values I want to calculate
+xvals = arange(-2*l,2*l,1000)
+yvals = x_eqn(xvals)
+
+import matplotlib.pyplot as plt
+
+#find the zeros of the x equation
+from scipy.optimize import root_scalar
+
+#L3 will be the most negative zero
+L3 = root_scalar(x_eqn, bracket=[-6e8,-2e8])
+#L2 will be the smallest positive zero
+L2 = root_scalar(x_eqn, bracket=[2e8,3.7e8])
+#L1 will be the largest zero
+L1 = root_scalar(x_eqn, bracket=[4e8,6e8])
+print(L1, L2, L3)
+
+plt.plot(xvals, yvals)
+plt.grid()
+plt.ylim(-0.01,.01)
+plt.show()
