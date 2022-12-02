@@ -1,0 +1,136 @@
+
+import numpy as np
+import sympy as smp
+from scipy.integrate import odeint
+from sympy.solvers.solveset import linsolve, nonlinsolve
+import matplotlib.pyplot as plt
+
+#define some symbols
+t = smp.symbols('t')
+G = 6.6738E-11  
+Mm = .07346e24 #mass of moon
+Me = 5.972e24 #mass of earth
+m = 100 #test mass
+mL = 100 #L4 marker mass
+rm = 384399000 #average distane between earth and moon
+the_dot = 2.6613e-6 
+the_ddot = 0
+
+#theta is the angle, counter clockwise from the x-axis, of the moon
+#r is the radial position of the test mass
+#phi is the angular position of the test mass
+#these are my degrees of freedom that define the entire system
+the, r, phi = smp.symbols('the r phi', cls=smp.Function)
+
+
+#define the functions as functions of time
+the = the(t)
+r = r(t)
+phi = phi(t)
+
+#define derivatives
+the_d = smp.diff(the, t)
+the_dd = smp.diff(the_d, t)
+r_d = smp.diff(r, t)
+r_dd = smp.diff(r_d, t)
+phi_d = smp.diff(phi, t)
+phi_dd = smp.diff(phi_d, t)
+
+
+
+#the earth is positioned at the origin; define the positions of the moon (xm, ym), L4 marker (xL, yL), and test mass (x, y)
+xm = rm*smp.cos(the)
+ym = rm*smp.sin(the)
+xL = .5*(rm*smp.cos(the)) - (smp.sqrt(3)/2)*(rm*smp.sin(the))
+yL = (smp.sqrt(3)/2)*(rm*smp.cos(the)) + .5*(rm*smp.sin(the))
+x = r*smp.cos(phi)
+y = r*smp.sin(phi)
+
+#create numerical functions
+xm_f = smp.lambdify((the, r, phi), xm)
+ym_f = smp.lambdify((the, r, phi), ym)
+xL_f = smp.lambdify((the, r, phi), xL)
+yL_f = smp.lambdify((the, r, phi), yL)
+x_f = smp.lambdify((the, r, phi), x)
+y_f = smp.lambdify((the, r, phi), y)
+
+#Potential and Kinetic Energies: Moon
+Tm = .5*Mm*(smp.diff(xm, t)**2 + smp.diff(ym, t)**2)
+Um = G*Mm*Me/(smp.sqrt(xm**2+ym**2))
+
+#L4 marker
+TL = .5*Mm*(smp.diff(xL, t)**2 + smp.diff(yL, t)**2)
+UL = G*Me*mL/(smp.sqrt(xL**2+yL**2)) + G*Mm*mL/(smp.sqrt((xL-xm)**2+(yL-ym)**2))
+
+#energies for test mass
+Tt = .5*m*((smp.diff(x, t))**2 + (smp.diff(y, t))**2)
+Ut = G*Me*m/(smp.sqrt(x**2+y**2)) + G*Mm*m/(smp.sqrt((x-xm)**2 + (y-ym)**2))
+
+#Define Lagrangians
+Lm = Tm - Um
+LL = TL - UL
+Lt = Tt - Ut
+
+#find Eurler-Lagrange equations w.r.t our 3 degrees of freedom
+#we don't care about the EU equations w.r.t theta for the L4 point or test mass; we get it from the moon's motion
+LmE = smp.diff(Lm, the) - smp.diff(smp.diff(Lm, the_d), t).simplify()
+#LLE = smp.diff(LL, the) - smp.diff(smp.diff(LL, the_d), t).simplify() 
+LtE1 = smp.diff(Lt, r) - smp.diff(smp.diff(Lt, r_d), t).simplify() 
+LtE2 = smp.diff(Lt, phi) - smp.diff(smp.diff(Lt, phi_d), t).simplify()
+#LtE3 = smp.diff(Lt, the) - smp.diff(smp.diff(Lt, the_d), t).simplify() 
+
+
+#solve the equations: 
+sols_test_r = smp.solve([LtE1], (r_dd), simplify=False, rational=False)
+sols_test_phi = smp.solve([LtE2], (phi_dd), simplify=False, rational=False)
+
+
+#dthe_dt_f = smp.lambdify(the_d, the_d)
+#do_dt_f = smp.lambdify((t, the, r, phi, the_d, r_d, phi_d), sols_moon[the_dd])
+
+
+the = 2.6613e-6*t
+#the_f = smp.lambdify(t, the)
+dr_dt_f = smp.lambdify(r_d, r_d)
+dR_dt_f = smp.lambdify((t, r, phi, r_d, phi_d), sols_test_r[r_dd])
+dphi_dt_f = smp.lambdify(phi_d, phi_d)
+dp_dt_f = smp.lambdify((t, r, phi, r_d, phi_d), sols_test_phi[phi_dd])
+
+
+def dSdt(S, t, the):
+    r, R, phi, p = S
+    return [
+        dr_dt_f(R),
+        dR_dt_f(t, the, r, phi, R, p),
+        dphi_dt_f(p),
+        dp_dt_f(t, the, r, phi, R, p),
+    ]
+
+
+t = np.linspace(0, 5000000, 1000)
+
+ans = odeint(dSdt, y0 = [384399000, 0.1, smp.pi*(2.5/3), 2.6618e-6], t=t, args=(0))
+print("ans done")
+
+#the = ans.T[0]
+r = ans.T[0]
+phi = ans.T[0]
+
+
+print(r)
+print(phi)
+
+def get_pos(the, r, phi):
+    return (xm_f(the, r, phi),
+            ym_f(the, r, phi),
+            xL_f(the, r, phi),
+            yL_f(the, r, phi),
+            x_f(the, r, phi),
+            y_f(the, r, phi))
+
+xe, ye, xL, yL, x, y = get_pos(ans.T[0], ans.T[2], ans.T[4])
+print("all done")
+
+#%% 
+plt.plot(t, xm)
+plt.show()
